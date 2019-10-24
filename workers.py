@@ -44,7 +44,7 @@ class AnekdotWorker(DefaultWorker):
 
 
 class HelpWorker(DefaultWorker):
-    reg_exp = re.compile(r'^\s*(справка|помощь|help)\s*(\S*)?', re.IGNORECASE)
+    reg_exp = re.compile(r'^\s*(справка|помощь|help|/start)\s*(\S*)?', re.IGNORECASE)
 
     def run(self):
         msg = self.param.message.textMessage.text
@@ -91,7 +91,7 @@ class CredentialsServerWorker(DefaultWorker):
 
 
 class CredentialsPrintWorker(DefaultWorker):
-    reg_exp = re.compile(r'^\s*(регистрация|reg)\s+(info|информация)', re.IGNORECASE)
+    reg_exp = re.compile(r'^\s*(информация\s+о\s+регистрации|reg\s+info)', re.IGNORECASE)
 
     def run(self):
         self.reply(get_cred_info(self.param.sender_uid))
@@ -148,12 +148,12 @@ class HostInfoWorker(AnsibleWorker):
 
 class RebootWorker(AnsibleWorker):
     file_name = './ansible/reboot.yaml'
-    reg_exp = re.compile(r'^\s*(перезапуск\s+сервера|server\s+reboot)\s+(\S+)', re.IGNORECASE)
+    reg_exp = re.compile(r'^\s*(перезагрузи\s+сервер|server\s+reboot)\s+(\S+)', re.IGNORECASE)
 
 
 class FastRebootWorker(AnsibleWorker):
     file_name = './ansible/fast_reboot.yaml'
-    reg_exp = re.compile(r'^\s*(быстрый\s+перезапуск\s+сервера|fast\s+server\s+reboot)\s+(\S+)', re.IGNORECASE)
+    reg_exp = re.compile(r'^\s*(перезагрузи\s+сервер|server\s+reboot)\s+(\S+)\s+(тихо|fast)', re.IGNORECASE)
 
 
 class ProcessListWorker(AnsibleWorker):
