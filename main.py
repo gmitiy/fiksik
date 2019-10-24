@@ -4,10 +4,10 @@ from dialog_bot_sdk.bot import DialogBot
 from workers import workers
 
 
-def get_worker(param, c_bot):
+def get_worker(param, local_bot):
     for Worker in workers:
         if Worker.test(param.message.textMessage.text):
-            return Worker(param, c_bot)
+            return Worker(param, local_bot)
 
 
 def on_msg(*params):

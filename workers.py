@@ -5,6 +5,7 @@ import urllib.request
 from threading import Thread
 
 from dialog_bot_sdk.bot import DialogBot
+from chat_bot import c_bot
 
 import const
 from db_utils import db
@@ -12,10 +13,10 @@ from templates import get_cred_info
 
 
 class DefaultWorker(Thread):
-    def __init__(self, param, c_bot):
+    def __init__(self, param, bot):
         super().__init__()
         self.param = param
-        self.bot: DialogBot = c_bot
+        self.bot: DialogBot = bot
 
     reg_exp = re.compile(r'.*', re.IGNORECASE)
 
@@ -130,7 +131,7 @@ class AnsibleWorker(DefaultWorker):
 
 class HostInfoWorker(AnsibleWorker):
     file_name = './ansible/host_info.yaml'
-    reg_exp = re.compile(r'^\s*(Состояние\s+сервера|server\s+info)\s+(\S+)', re.IGNORECASE)
+    reg_exp = re.compile(r'^\s*(Состояние\s+использования\s+ресурсов\s+сервера|server\s+info)\s+(\S+)', re.IGNORECASE)
 
     def run(self):
         exp = self.reg_exp.match(self.param.message.textMessage.text)
@@ -161,6 +162,11 @@ class ProcessListWorker(AnsibleWorker):
     reg_exp = re.compile(r'^\s*(запущенные\s+процессы\s+сервера|server\s+proc)\s+(\S+)', re.IGNORECASE)
 
 
+class ChatBotWorker(DefaultWorker):
+    def run(self):
+        self.send(str(c_bot.get_response(self.param.message.textMessage.text)))
+
+
 workers = [
     HelpWorker,
     CredentialsWorker,
@@ -171,5 +177,5 @@ workers = [
     FastRebootWorker,
     ProcessListWorker,
     AnekdotWorker,
-    DefaultWorker
+    ChatBotWorker
 ]
