@@ -1,7 +1,0 @@
----
-- hosts: all
-  gather_facts: false
-  tasks:
-    - shell: ps
-      register: ps
-    - debug: var=ps.stdout_lines
