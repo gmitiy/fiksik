@@ -25,14 +25,15 @@ class Database(object):
         creds: Collection = self.db.creds
         res = creds.find_one({'uid': user_id, 'system': system})
         if res:
-            return {'login': res['login'], 'passwd': decrypt(crypto_password, res['passwd'])}
+            return {'login': res['login'], 'passwd': decrypt(crypto_password, res['passwd']).decode('ascii')}
         return None
 
     def get_cred_by_alias(self, user_id, alias):
         creds: Collection = self.db.creds
         res = creds.find_one({'uid': user_id, 'alias': alias})
         if res:
-            return {'login': res['login'], 'passwd': decrypt(crypto_password, res['passwd']), 'ip': res['ip']}
+            return {'login': res['login'], 'passwd': decrypt(crypto_password, res['passwd']).decode('ascii'),
+                    'ip': res['ip']}
         return None
 
     def get_all_cred(self, user_id):

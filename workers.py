@@ -1,7 +1,12 @@
+import json
 import re
-import const
+import subprocess
+import urllib.request
 from threading import Thread
+
 from dialog_bot_sdk.bot import DialogBot
+
+import const
 from db_utils import db
 from templates import get_cred_info
 
@@ -26,6 +31,16 @@ class DefaultWorker(Thread):
 
     def send(self, text):
         self.bot.messaging.send_message(self.param.peer, text)
+
+
+class AnekdotWorker(DefaultWorker):
+    reg_exp = re.compile(r'(анекдот)', re.IGNORECASE)
+
+    def run(self):
+        with urllib.request.urlopen("http://rzhunemogu.ru/RandJSON.aspx?CType=1") as url:
+            data = json.loads(url.read().decode('cp1251'), strict=False)
+            print(data)
+        self.reply(data.get('content', 'Не прошло ('))
 
 
 class HelpWorker(DefaultWorker):
@@ -82,10 +97,79 @@ class CredentialsPrintWorker(DefaultWorker):
         self.reply(get_cred_info(self.param.sender_uid))
 
 
+class AnsibleWorker(DefaultWorker):
+    file_name = ''
+    command = 'ansible-playbook {file} -e ' \
+              '"ansible_connection=ssh ansible_ssh_user={login} ansible_ssh_pass={passwd}" -i {ip},'
+
+    def exec(self, alias):
+        cred = db.get_cred_by_alias(self.param.sender_uid, alias)
+        if cred:
+            command = self.command.format(file=self.file_name,
+                                          login=cred['login'],
+                                          passwd=cred['passwd'],
+                                          ip=cred['ip'])
+
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+            output, _ = process.communicate()
+            output = output.decode('ascii')
+            if 'Failed to connect to the host' in output:
+                return False, const.server_connection_fail
+
+            if 'Permission denied' in output:
+                return False, const.server_connection_denied
+
+            return True, output
+        return False, const.cred_error
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        _, data = self.exec(exp.group(2))
+        self.reply(data)
+
+
+class HostInfoWorker(AnsibleWorker):
+    file_name = './ansible/host_info.yaml'
+    reg_exp = re.compile(r'^\s*(Состояние\s+сервера|server\s+info)\s+(\S+)', re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        res, data = self.exec(exp.group(2))
+        if res:
+            tmp = str(data).splitlines()
+            try:
+                self.reply("\n".join([tmp[i] for i in range(1, 6)]))
+            except IndexError:
+                print(tmp)
+                self.reply(const.command_error)
+        else:
+            self.reply(data)
+
+
+class RebootWorker(AnsibleWorker):
+    file_name = './ansible/reboot.yaml'
+    reg_exp = re.compile(r'^\s*(перезапуск\s+сервера|server\s+reboot)\s+(\S+)', re.IGNORECASE)
+
+
+class FastRebootWorker(AnsibleWorker):
+    file_name = './ansible/fast_reboot.yaml'
+    reg_exp = re.compile(r'^\s*(быстрый\s+перезапуск\s+сервера|fast\s+server\s+reboot)\s+(\S+)', re.IGNORECASE)
+
+
+class ProcessListWorker(AnsibleWorker):
+    file_name = './ansible/process_list.yaml'
+    reg_exp = re.compile(r'^\s*(запущенные\s+процессы\s+сервера|server\s+proc)\s+(\S+)', re.IGNORECASE)
+
+
 workers = [
     HelpWorker,
     CredentialsWorker,
     CredentialsServerWorker,
     CredentialsPrintWorker,
+    HostInfoWorker,
+    RebootWorker,
+    FastRebootWorker,
+    ProcessListWorker,
+    AnekdotWorker,
     DefaultWorker
 ]
