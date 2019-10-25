@@ -38,8 +38,14 @@ class AnekdotWorker(DefaultWorker):
     reg_exp = re.compile(r'(анекдот)', re.IGNORECASE)
 
     def run(self):
-        with urllib.request.urlopen("http://rzhunemogu.ru/RandJSON.aspx?CType=1") as url:
-            data = json.loads(url.read().decode('cp1251'), strict=False)
+        data = {}
+        for _ in range(4):
+            with urllib.request.urlopen("http://rzhunemogu.ru/RandJSON.aspx?CType=1") as url:
+                try:
+                    data = json.loads(url.read().decode('cp1251'), strict=False)
+                    break
+                except:
+                    pass
         self.reply(data.get('content', 'Не прошло ('))
 
 
