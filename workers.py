@@ -327,24 +327,33 @@ class StashPrsNotifyWorker(DefaultWorker):
                 opened_prs = list(filter(lambda x: x['state'] is 'OPEN', diff_prs))
                 if len(opened_prs) > 0:
                     opened_prs_msg = "\n".join(
-                        ["Пользователь {} открыл PR #{} в {}/{}".format(pr.commits()[0]['author']['name'],
-                                                                        pr.get()['id'], project, repo) for pr in
+                        ["Пользователь {} открыл PR #{} \"{}\" {}->{}".format(pr['author']['displayName'],
+                                                                              pr['id'], pr['title'],
+                                                                              pr['fromRef']['displayId'],
+                                                                              pr['toRef']['displayId']) for
+                         pr in
                          opened_prs]
                     )
 
                 merged_prs = list(filter(lambda x: x['state'] is 'MERGED', diff_prs))
                 if len(merged_prs) > 0:
                     merged_prs_msg = "\n".join(
-                        ["Пользователь {} выполнил merge PR #{} в {}/{}".format(pr.commits()[0]['author']['name'],
-                                                                                pr.get()['id'], project, repo) for pr in
+                        ["Пользователь {} выполнил merge PR #{} \"{}\" {}->{}".format(pr['author']['displayName'],
+                                                                                      pr['id'], pr['title'],
+                                                                                      pr['fromRef']['displayId'],
+                                                                                      pr['toRef']['displayId']) for
+                         pr in
                          merged_prs]
                     )
 
                 declined_prs = list(filter(lambda x: x['state'] is 'DECLINED', diff_prs))
                 if len(declined_prs) > 0:
                     declined_prs_msg = "\n".join(
-                        ["Пользователь {} отклонил PR #{} в {}/{}".format(pr.commits()[0]['author']['name'],
-                                                                          pr.get()['id'], project, repo) for pr in
+                        ["Пользователь {} отклонил PR #{} \"{}\" {}->{}".format(pr['author']['displayName'],
+                                                                                pr['id'], pr['title'],
+                                                                                pr['fromRef']['displayId'],
+                                                                                pr['toRef']['displayId']) for
+                         pr in
                          declined_prs]
                     )
 
