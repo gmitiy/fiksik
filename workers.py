@@ -316,25 +316,37 @@ class StashPrsNotifyWorker(DefaultWorker):
             self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
             return
 
-        prev_prs = list(stash.projects[project].repos[repo].pull_requests())
+        prev_prs = list(stash.projects[project].repos[repo].pull_requests.all())
         intro = 'В репозитории #{}_{} получены новые изменения Pull Request:'.format(repo, project)
         while True:
             declined_prs_msg, opened_prs_msg, merged_prs_msg = '', '', ''
-            prs = list(stash.projects[project].repos[repo].pull_requests())
+            prs = list(stash.projects[project].repos[repo].pull_requests.all())
             if not prev_prs and prev_prs != prs:
                 diff_prs = diff(prs, prev_prs)
 
-                opened_prs = list(filter(lambda x: x.state is 'OPEN', diff_prs))
+                opened_prs = list(filter(lambda x: x['state'] is 'OPEN', diff_prs))
                 if len(opened_prs) > 0:
-                    opened_prs_msg = 'Открыты новые pull request\'ы: {}'.format(" ".join(opened_prs))
+                    opened_prs_msg = "\n".join(
+                        ["Пользователь {} открыл PR #{} в {}/{}".format(pr.commits()[0]['author']['name'],
+                                                                        pr.get()['id'], project, repo) for pr in
+                         opened_prs]
+                    )
 
-                merged_prs = list(filter(lambda x: x.state is 'MERGED', diff_prs))
+                merged_prs = list(filter(lambda x: x['state'] is 'MERGED', diff_prs))
                 if len(merged_prs) > 0:
-                    merged_prs_msg = 'Вмержены pull request\'ы: {}'.format(" ".join(merged_prs))
+                    merged_prs_msg = "\n".join(
+                        ["Пользователь {} выполнил merge PR #{} в {}/{}".format(pr.commits()[0]['author']['name'],
+                                                                                pr.get()['id'], project, repo) for pr in
+                         merged_prs]
+                    )
 
-                declined_prs = list(filter(lambda x: x.state is 'DECLINED', diff_prs))
+                declined_prs = list(filter(lambda x: x['state'] is 'DECLINED', diff_prs))
                 if len(declined_prs) > 0:
-                    declined_prs_msg = 'Вмержены pull request\'ы: {}'.format(" ".join(declined_prs))
+                    declined_prs_msg = "\n".join(
+                        ["Пользователь {} отклонил PR #{} в {}/{}".format(pr.commits()[0]['author']['name'],
+                                                                          pr.get()['id'], project, repo) for pr in
+                         declined_prs]
+                    )
 
                 self.reply("\n".join((intro, opened_prs_msg, merged_prs_msg, declined_prs_msg)))
                 prev_prs = prs
