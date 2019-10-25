@@ -253,22 +253,20 @@ class JenkinsRunWorker(JenkinsWorker):
 
 class StashRepoNotifyWorker(DefaultWorker):
     url = "http://52.164.121.202:7990"
-    reg_exp = re.compile(r'^\s*(подписка\s+commit|подписка\s+на\s+коммиты)\s+в\s+проекте(\S+)\s+,\s+репозитории(\S+)',
+    reg_exp = re.compile(r'^\s*(подписка\s+commit|подписка\s+на\s+коммиты)\s+в\s+проекте\s+(\S+)\s+репозитории\s+(\S+)',
                          re.IGNORECASE)
 
     def run(self):
         exp = self.reg_exp.match(self.param.message.textMessage.text)
         project, repo = exp.group(2), exp.group(3)
 
-        if not project or not repo:
-            self.reply('Укажи данные существующего проекта и репо Stash')
-            return
-
         cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
-        if not cred:
-            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
 
-        stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+        try:
+            stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+        except Exception:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+            return
 
         prev_commits = []
         intro = 'В репозитории #{}_{} получены новые изменения:'.format(repo, project)
@@ -294,22 +292,20 @@ class StashRepoNotifyWorker(DefaultWorker):
 class StashPrsNotifyWorker(DefaultWorker):
     url = "http://52.164.121.202:7990"
     reg_exp = re.compile(
-        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+в\s+проекте(\S+)\s+,\s+репозитории(\S+)',
+        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+в\s+проекте\s+(\S+)\s+репозитории\s+(\S+)',
         re.IGNORECASE)
 
     def run(self):
         exp = self.reg_exp.match(self.param.message.textMessage.text)
         project, repo = exp.group(2), exp.group(3)
 
-        if not project or not repo:
-            self.reply('Укажи данные существующего проекта и репо Stash')
-            return
-
         cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
-        if not cred:
-            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
 
-        stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+        try:
+            stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+        except Exception:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+            return
 
         prev_prs = list(stash.projects[project].repos[repo].pull_requests())
         intro = 'В репозитории #{}_{} получены новые изменения Pull Request:'.format(repo, project)
@@ -340,22 +336,20 @@ class StashPrsNotifyWorker(DefaultWorker):
 class StashSinglePrNotifyWorker(DefaultWorker):
     url = "http://52.164.121.202:7990"
     reg_exp = re.compile(
-        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+с\s+ID\s+(\S+)\s+в\s+проекте(\S+)\s+,\s+репозитории(\S+)',
+        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+с\s+ID\s+(\S+)\s+в\s+проекте\s+(\S+)\s+репозитории\s+(\S+)',
         re.IGNORECASE)
 
     def run(self):
         exp = self.reg_exp.match(self.param.message.textMessage.text)
         pr_id, project, repo = exp.group(2), exp.group(3), exp.group(4)
 
-        if not pr_id or not project or not repo:
-            self.reply('Укажи данные существующего проекта, репо и PR в Stash')
-            return
-
         cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
-        if not cred:
-            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
 
-        stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+        try:
+            stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+        except Exception:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+            return
 
         prev_pr = stash.projects[project].repos[repo].pull_requests[pr_id].get()
         intro = 'В репозитории #{}_{}_PR{} получены новые изменения Pull Request:'.format(repo, project, pr_id)
@@ -372,8 +366,6 @@ class StashSinglePrNotifyWorker(DefaultWorker):
             time.sleep(500)
 
 
-
-
 workers = [
     HelpWorker,
     CredentialsWorker,
@@ -388,8 +380,8 @@ workers = [
     JenkinsStatusWorker,
     JenkinsRunWorker,
     AnekdotWorker,
-    ChatBotWorker,
     StashRepoNotifyWorker,
     StashPrsNotifyWorker,
-    StashSinglePrNotifyWorker
+    StashSinglePrNotifyWorker,
+    ChatBotWorker
 ]
