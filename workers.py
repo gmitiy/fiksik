@@ -9,7 +9,9 @@ from chat_bot import c_bot
 
 import const
 from db_utils import db
-from templates import get_cred_info
+from templates import get_cred_info, diff
+
+import stashy
 
 
 class DefaultWorker(Thread):
@@ -249,6 +251,34 @@ class JenkinsRunWorker(JenkinsWorker):
         self.reply('Привышен интервал ожидания сборки')
 
 
+class StashRepoNotifyWorker(DefaultWorker):
+    reg_exp = re.compile(r'^\s*(подписка\s+commit|подписка\s+на\s+коммиты)\s+(\S+)', re.IGNORECASE)
+
+    def __init__(self, project, repo, url="http://52.164.121.202:7990", login="admin", password="admin"):
+        super().__init__()
+        self.stash = stashy.connect(url, login, password)
+        self.project = project
+        self.repo = repo
+
+    def run(self):
+        prev_commits = []
+        intro = 'В репозитории #{}_{} получены новые изменения:\n'.format(self.repo, self.project)
+        while True:
+            removed_commits_msg, added_commits_msg = '', ''
+            commits = list(self.stash.projects[self.project].repos[self.repo].commits())
+            if not prev_commits and prev_commits != commits:
+                removed_commits = diff(prev_commits, commits)
+
+                if len(removed_commits) > 0:
+                    removed_commits_msg = 'Удалены коммиты: {}'.format(" ".join(removed_commits))
+
+                added_commits = diff(commits, prev_commits)
+                if len(added_commits) > 0:
+                    added_commits_msg = 'Добавлены коммиты: {}'.format(" ".join(added_commits))
+
+                self.reply("\n".join((intro, removed_commits_msg, added_commits_msg)))
+
+
 workers = [
     HelpWorker,
     CredentialsWorker,
@@ -263,5 +293,6 @@ workers = [
     JenkinsStatusWorker,
     JenkinsRunWorker,
     AnekdotWorker,
-    ChatBotWorker
+    ChatBotWorker,
+    StashRepoNotifyWorker
 ]
