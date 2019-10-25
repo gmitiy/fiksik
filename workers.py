@@ -4,14 +4,13 @@ import subprocess
 import urllib.request
 from threading import Thread
 
+import stashy
 from dialog_bot_sdk.bot import DialogBot
-from chat_bot import c_bot
 
 import const
+from chat_bot import c_bot
 from db_utils import db
 from templates import get_cred_info, diff
-
-import stashy
 
 
 class DefaultWorker(Thread):
@@ -288,6 +287,49 @@ class StashRepoNotifyWorker(DefaultWorker):
                 self.reply("\n".join((intro, removed_commits_msg, added_commits_msg)))
 
 
+class StashPrNotifyWorker(DefaultWorker):
+    url = "http://52.164.121.202:7990"
+    reg_exp = re.compile(
+        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+в проекте(\S+)\s+,\s+репозитории(\S+)',
+        re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        project, repo = exp.group(2), exp.group(3)
+
+        if not project or not repo:
+            self.reply('Укажи данные существующего проекта и репо Stash')
+            return
+
+        cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
+        if not cred:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+
+        stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+
+        prev_prs = list(stash.projects[project].repos[repo].pull_requests())
+        intro = 'В репозитории #{}_{} получены новые изменения PR:\n'.format(repo, project)
+        while True:
+            declined_prs_msg, opened_prs_msg, merged_prs_msg = '', '', ''
+            prs = list(stash.projects[project].repos[repo].pull_requests())
+            if not prev_prs and prev_prs != prs:
+                diff_prs = diff(prs, prev_prs)
+
+                opened_prs = list(filter(lambda x: x.state is 'OPEN', diff_prs))
+                if len(opened_prs) > 0:
+                    opened_prs_msg = 'Открыты новые pull request\'ы: {}'.format(" ".join(opened_prs))
+
+                merged_prs = list(filter(lambda x: x.state is 'MERGED', diff_prs))
+                if len(merged_prs) > 0:
+                    merged_prs_msg = 'Вмержены pull request\'ы: {}'.format(" ".join(merged_prs))
+
+                declined_prs = list(filter(lambda x: x.state is 'DECLINED', diff_prs))
+                if len(declined_prs) > 0:
+                    declined_prs_msg = 'Вмержены pull request\'ы: {}'.format(" ".join(declined_prs))
+
+                self.reply("\n".join((intro, opened_prs_msg, merged_prs_msg, declined_prs_msg)))
+
+
 workers = [
     HelpWorker,
     CredentialsWorker,
@@ -303,5 +345,6 @@ workers = [
     JenkinsRunWorker,
     AnekdotWorker,
     ChatBotWorker,
-    StashRepoNotifyWorker
+    StashRepoNotifyWorker,
+    StashPrNotifyWorker
 ]
