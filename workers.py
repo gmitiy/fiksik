@@ -1,4 +1,4 @@
-import json, time
+import json
 import re
 import subprocess
 import time
@@ -263,25 +263,34 @@ class StashRepoNotifyWorker(DefaultWorker):
         cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
 
         try:
-            stash = stashy.connect(self.url, cred['login'], cred['passswd'])
-        except Exception:
-            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+            stash = stashy.connect(self.url, cred['login'], cred['passwd'])
+        except Exception as e:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль ' + str(e))
             return
 
         prev_commits = []
         intro = 'В репозитории #{}_{} получены новые изменения:'.format(repo, project)
         while True:
             removed_commits_msg, added_commits_msg = '', ''
-            commits = list(stash.projects[project].repos[repo].commits())
+            commits = list(stash.projects[project].repos[repo].commits('master'))
             if not prev_commits and prev_commits != commits:
                 removed_commits = diff(prev_commits, commits)
-
                 if len(removed_commits) > 0:
-                    removed_commits_msg = 'Удалены коммиты: {}'.format(" ".join(removed_commits))
+                    removed_commits_msg = 'Удалены коммиты:\n{}'.format(
+                        "\n".join(
+                            ["\t".join((commit['displayId'], commit['author']['name'])) for commit in
+                             removed_commits]
+                        )
+                    )
 
                 added_commits = diff(commits, prev_commits)
                 if len(added_commits) > 0:
-                    added_commits_msg = 'Добавлены коммиты: {}'.format(" ".join(added_commits))
+                    added_commits_msg = 'Добавлены коммиты:\n{}'.format(
+                        "\n".join(
+                            ["\t".join((commit['displayId'], commit['author']['name'])) for commit in
+                             added_commits]
+                        )
+                    )
 
                 self.reply("\n".join((intro, removed_commits_msg, added_commits_msg)))
                 prev_commits = commits
@@ -302,7 +311,7 @@ class StashPrsNotifyWorker(DefaultWorker):
         cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
 
         try:
-            stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+            stash = stashy.connect(self.url, cred['login'], cred['passwd'])
         except Exception:
             self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
             return
@@ -346,7 +355,7 @@ class StashSinglePrNotifyWorker(DefaultWorker):
         cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
 
         try:
-            stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+            stash = stashy.connect(self.url, cred['login'], cred['passwd'])
         except Exception:
             self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
             return
