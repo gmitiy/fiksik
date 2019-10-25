@@ -252,20 +252,29 @@ class JenkinsRunWorker(JenkinsWorker):
 
 
 class StashRepoNotifyWorker(DefaultWorker):
-    reg_exp = re.compile(r'^\s*(подписка\s+commit|подписка\s+на\s+коммиты)\s+(\S+)', re.IGNORECASE)
-
-    def __init__(self, project, repo, url="http://52.164.121.202:7990", login="admin", password="admin"):
-        super().__init__()
-        self.stash = stashy.connect(url, login, password)
-        self.project = project
-        self.repo = repo
+    url = "http://52.164.121.202:7990"
+    reg_exp = re.compile(r'^\s*(подписка\s+commit|подписка\s+на\s+коммиты)\s+в проекте(\S+)\s+,\s+репозитории(\S+)',
+                         re.IGNORECASE)
 
     def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        project, repo = exp.group(2), exp.group(3)
+
+        if not project or not repo:
+            self.reply('Укажи данные существующего проекта и репо Stash')
+            return
+
+        cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
+        if not cred:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+
+        stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+
         prev_commits = []
-        intro = 'В репозитории #{}_{} получены новые изменения:\n'.format(self.repo, self.project)
+        intro = 'В репозитории #{}_{} получены новые изменения:\n'.format(repo, project)
         while True:
             removed_commits_msg, added_commits_msg = '', ''
-            commits = list(self.stash.projects[self.project].repos[self.repo].commits())
+            commits = list(stash.projects[project].repos[repo].commits())
             if not prev_commits and prev_commits != commits:
                 removed_commits = diff(prev_commits, commits)
 
