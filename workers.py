@@ -1,6 +1,7 @@
 import json, time
 import re
 import subprocess
+import time
 import urllib.request
 from threading import Thread
 
@@ -252,7 +253,7 @@ class JenkinsRunWorker(JenkinsWorker):
 
 class StashRepoNotifyWorker(DefaultWorker):
     url = "http://52.164.121.202:7990"
-    reg_exp = re.compile(r'^\s*(подписка\s+commit|подписка\s+на\s+коммиты)\s+в проекте(\S+)\s+,\s+репозитории(\S+)',
+    reg_exp = re.compile(r'^\s*(подписка\s+commit|подписка\s+на\s+коммиты)\s+в\s+проекте(\S+)\s+,\s+репозитории(\S+)',
                          re.IGNORECASE)
 
     def run(self):
@@ -270,7 +271,7 @@ class StashRepoNotifyWorker(DefaultWorker):
         stash = stashy.connect(self.url, cred['login'], cred['passswd'])
 
         prev_commits = []
-        intro = 'В репозитории #{}_{} получены новые изменения:\n'.format(repo, project)
+        intro = 'В репозитории #{}_{} получены новые изменения:'.format(repo, project)
         while True:
             removed_commits_msg, added_commits_msg = '', ''
             commits = list(stash.projects[project].repos[repo].commits())
@@ -285,12 +286,15 @@ class StashRepoNotifyWorker(DefaultWorker):
                     added_commits_msg = 'Добавлены коммиты: {}'.format(" ".join(added_commits))
 
                 self.reply("\n".join((intro, removed_commits_msg, added_commits_msg)))
+                prev_commits = commits
+
+            time.sleep(500)
 
 
-class StashPrNotifyWorker(DefaultWorker):
+class StashPrsNotifyWorker(DefaultWorker):
     url = "http://52.164.121.202:7990"
     reg_exp = re.compile(
-        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+в проекте(\S+)\s+,\s+репозитории(\S+)',
+        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+в\s+проекте(\S+)\s+,\s+репозитории(\S+)',
         re.IGNORECASE)
 
     def run(self):
@@ -308,7 +312,7 @@ class StashPrNotifyWorker(DefaultWorker):
         stash = stashy.connect(self.url, cred['login'], cred['passswd'])
 
         prev_prs = list(stash.projects[project].repos[repo].pull_requests())
-        intro = 'В репозитории #{}_{} получены новые изменения PR:\n'.format(repo, project)
+        intro = 'В репозитории #{}_{} получены новые изменения Pull Request:'.format(repo, project)
         while True:
             declined_prs_msg, opened_prs_msg, merged_prs_msg = '', '', ''
             prs = list(stash.projects[project].repos[repo].pull_requests())
@@ -328,6 +332,46 @@ class StashPrNotifyWorker(DefaultWorker):
                     declined_prs_msg = 'Вмержены pull request\'ы: {}'.format(" ".join(declined_prs))
 
                 self.reply("\n".join((intro, opened_prs_msg, merged_prs_msg, declined_prs_msg)))
+                prev_prs = prs
+
+            time.sleep(500)
+
+
+class StashSinglePrNotifyWorker(DefaultWorker):
+    url = "http://52.164.121.202:7990"
+    reg_exp = re.compile(
+        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+с\s+ID\s+(\S+)\s+в\s+проекте(\S+)\s+,\s+репозитории(\S+)',
+        re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        pr_id, project, repo = exp.group(2), exp.group(3), exp.group(4)
+
+        if not pr_id or not project or not repo:
+            self.reply('Укажи данные существующего проекта, репо и PR в Stash')
+            return
+
+        cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
+        if not cred:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+
+        stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+
+        prev_pr = stash.projects[project].repos[repo].pull_requests[pr_id].get()
+        intro = 'В репозитории #{}_{}_PR{} получены новые изменения Pull Request:'.format(repo, project, pr_id)
+        while prev_pr and prev_pr.state != 'MERGED':
+            pr = stash.projects[project].repos[repo].pull_requests[pr_id].get()
+            if pr != prev_pr:
+                diff_info = 'Текущие изменения в PR:\n{}'.format(pr.diff())
+                merge_info = 'Информация о доступности слияния:\n{}'.format(pr.merge_info())
+                can_merged = 'Слияние можно проводить' if pr.can_merge() else 'Слияние запрещено'
+
+                self.reply("\n".join((intro, diff_info, merge_info, can_merged)))
+                prev_pr = pr
+
+            time.sleep(500)
+
+
 
 
 workers = [
@@ -346,5 +390,6 @@ workers = [
     AnekdotWorker,
     ChatBotWorker,
     StashRepoNotifyWorker,
-    StashPrNotifyWorker
+    StashPrsNotifyWorker,
+    StashSinglePrNotifyWorker
 ]
