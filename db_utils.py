@@ -12,7 +12,7 @@ class Database(object):
 
     def upsert_cred(self, user_id, system, login, passwd, alias=None, ip=None):
         creds: Collection = self.db.creds
-        res = creds.update_one({'uid': user_id, 'system': system, 'alias': alias},
+        res = creds.update_one({'uid': user_id, 'system': system.upper(), 'alias': alias},
                                {'$set': {
                                    'login': login,
                                    'passwd': encrypt(crypto_password, passwd),
@@ -39,7 +39,7 @@ class Database(object):
     def get_all_cred(self, user_id):
         creds: Collection = self.db.creds
         res = []
-        for i in creds.find({'uid': user_id}):
+        for i in creds.find({"uid": user_id}):
             res.append(i)
         return {'cred': res}
 

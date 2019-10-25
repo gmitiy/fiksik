@@ -1,0 +1,23 @@
+---
+- hosts: all
+  gather_facts: false
+  tasks:
+  - name: Clean temporary files
+    sudo: yes
+    shell: rm -r /tmp/*
+  - name: Remove directories
+    sudo: yes
+    shell: rm -r /var/tmp/* 
+  - name: Find /var/log files older more then 2 days
+    sudo: yes
+    find:
+      paths: /var/log
+      age: 2d
+      recurse: yes
+    register: files_list2   
+  - name: Remove directories
+    sudo: yes
+    file:
+     path: "{{ item.path }}"
+     state: absent
+    with_items: "{{ files_list2.files }}"

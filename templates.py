@@ -1,13 +1,13 @@
 from jinja2 import Template
 from db_utils import db
 
-tpl_server = "{% for s in cred %}{% if s['system'] == 'SRV' %}" \
+tpl_server = "{% for s in cred %}{% if s['system']|upper == 'SRV' %}" \
              "Сервер: {{ s['alias'] }}  ip: {{ s['ip'] }}  логин: {{ s['login'] }}\n" \
              "{% endif %}{% endfor %}"
-tpl_bitbucket = "{% for s in cred %}{% if s['system'] == 'BITBUCKET' %}" \
+tpl_bitbucket = "{% for s in cred %}{% if s['system']|upper == 'BITBUCKET' %}" \
                 "BitBucket логин: {{ s['login'] }}\n " \
                 "{% endif %}{% endfor %}"
-tpl_jenkins = "{% for s in cred %}{% if s['system'] == 'JENKINS' %}" \
+tpl_jenkins = "{% for s in cred %}{% if s['system']|upper == 'JENKINS' %}" \
               "Jenkins логин: {{ s['login'] }}\n" \
               "{% endif %}{% endfor %}"
 

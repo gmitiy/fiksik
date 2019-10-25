@@ -1,4 +1,4 @@
-import json
+import json, time
 import re
 import subprocess
 import urllib.request
@@ -40,7 +40,6 @@ class AnekdotWorker(DefaultWorker):
     def run(self):
         with urllib.request.urlopen("http://rzhunemogu.ru/RandJSON.aspx?CType=1") as url:
             data = json.loads(url.read().decode('cp1251'), strict=False)
-            print(data)
         self.reply(data.get('content', 'Не прошло ('))
 
 
@@ -167,6 +166,53 @@ class ChatBotWorker(DefaultWorker):
         self.send(str(c_bot.get_response(self.param.message.textMessage.text)))
 
 
+class JenkinsWorker(DefaultWorker):
+    command = 'java -cp ./jar/jenkinsadapter.jar ru.sberbank.hackathon.jenkins.Main http://192.168.31.105:8080 ' \
+              '{login} {passwd} {command} {param}'
+
+    def exec(self, command, param):
+        cred = db.get_cred(self.param.sender_uid, 'JENKINS')
+        if cred:
+            command = self.command.format(login=cred['login'],
+                                          passwd=cred['passwd'],
+                                          command=command,
+                                          param=param)
+
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+            output, error = process.communicate()
+            if error:
+                return False, error.decode('utf-8')
+            return True, output.decode('utf-8')
+        return False, const.cred_error
+
+
+class JenkinsStatusWorker(JenkinsWorker):
+    reg_exp = re.compile(r'^\s*(статус\s+сборки|job\s+status)\s+(\S+)', re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        res, data = self.exec('status', exp.group(2))
+        self.reply(data)
+
+
+class JenkinsRunWorker(JenkinsWorker):
+    reg_exp = re.compile(r'^\s*(запусти\s+сборку|job\s+run)\s+(\S+)', re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        res, data = self.exec('build', exp.group(2))
+        self.reply(data)
+        i = 0
+        while i < 12:
+            time.sleep(4)
+            res, data = self.exec('status', exp.group(2))
+            i += 1
+            if data in ['FAILURE', 'SUCCESS']:
+                self.reply("Результат сборки: " + data)
+                return
+        self.reply('Привышен интервал ожидания сборки')
+
+
 workers = [
     HelpWorker,
     CredentialsWorker,
@@ -176,6 +222,8 @@ workers = [
     RebootWorker,
     FastRebootWorker,
     ProcessListWorker,
+    JenkinsStatusWorker,
+    JenkinsRunWorker,
     AnekdotWorker,
     ChatBotWorker
 ]

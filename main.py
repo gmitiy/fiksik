@@ -11,8 +11,7 @@ def get_worker(param, local_bot):
 
 
 def on_msg(*params):
-    worker = get_worker(params[0], bot)
-    worker.run()
+    get_worker(params[0], bot).run()
 
 
 if __name__ == '__main__':
