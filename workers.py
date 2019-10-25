@@ -184,6 +184,19 @@ class WildflyWorker(AnsibleWorker):
             self.reply(data)
 
 
+class ClearTempWorker(AnsibleWorker):
+    file_name = './ansible/clean_temp.yaml'
+    reg_exp = re.compile(r'^\s*(Очисти\s+temp\s+директории\s+сервера|temp\s+clean)\s+(\S+)', re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        res, data = self.exec(exp.group(2))
+        if res:
+            self.reply('Готово')
+        else:
+            self.reply(data)
+
+
 class ChatBotWorker(DefaultWorker):
     def run(self):
         self.send(str(c_bot.get_response(self.param.message.textMessage.text)))
@@ -246,6 +259,7 @@ workers = [
     FastRebootWorker,
     ProcessListWorker,
     WildflyWorker,
+    ClearTempWorker,
     JenkinsStatusWorker,
     JenkinsRunWorker,
     AnekdotWorker,
