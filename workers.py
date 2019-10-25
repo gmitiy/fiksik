@@ -1,15 +1,17 @@
 import json, time
 import re
 import subprocess
+import time
 import urllib.request
 from threading import Thread
 
+import stashy
 from dialog_bot_sdk.bot import DialogBot
-from chat_bot import c_bot
 
 import const
+from chat_bot import c_bot
 from db_utils import db
-from templates import get_cred_info
+from templates import get_cred_info, diff
 
 
 class DefaultWorker(Thread):
@@ -249,6 +251,121 @@ class JenkinsRunWorker(JenkinsWorker):
         self.reply('Привышен интервал ожидания сборки')
 
 
+class StashRepoNotifyWorker(DefaultWorker):
+    url = "http://52.164.121.202:7990"
+    reg_exp = re.compile(r'^\s*(подписка\s+commit|подписка\s+на\s+коммиты)\s+в\s+проекте\s+(\S+)\s+репозитории\s+(\S+)',
+                         re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        project, repo = exp.group(2), exp.group(3)
+
+        cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
+
+        try:
+            stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+        except Exception:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+            return
+
+        prev_commits = []
+        intro = 'В репозитории #{}_{} получены новые изменения:'.format(repo, project)
+        while True:
+            removed_commits_msg, added_commits_msg = '', ''
+            commits = list(stash.projects[project].repos[repo].commits())
+            if not prev_commits and prev_commits != commits:
+                removed_commits = diff(prev_commits, commits)
+
+                if len(removed_commits) > 0:
+                    removed_commits_msg = 'Удалены коммиты: {}'.format(" ".join(removed_commits))
+
+                added_commits = diff(commits, prev_commits)
+                if len(added_commits) > 0:
+                    added_commits_msg = 'Добавлены коммиты: {}'.format(" ".join(added_commits))
+
+                self.reply("\n".join((intro, removed_commits_msg, added_commits_msg)))
+                prev_commits = commits
+
+            time.sleep(500)
+
+
+class StashPrsNotifyWorker(DefaultWorker):
+    url = "http://52.164.121.202:7990"
+    reg_exp = re.compile(
+        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+в\s+проекте\s+(\S+)\s+репозитории\s+(\S+)',
+        re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        project, repo = exp.group(2), exp.group(3)
+
+        cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
+
+        try:
+            stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+        except Exception:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+            return
+
+        prev_prs = list(stash.projects[project].repos[repo].pull_requests())
+        intro = 'В репозитории #{}_{} получены новые изменения Pull Request:'.format(repo, project)
+        while True:
+            declined_prs_msg, opened_prs_msg, merged_prs_msg = '', '', ''
+            prs = list(stash.projects[project].repos[repo].pull_requests())
+            if not prev_prs and prev_prs != prs:
+                diff_prs = diff(prs, prev_prs)
+
+                opened_prs = list(filter(lambda x: x.state is 'OPEN', diff_prs))
+                if len(opened_prs) > 0:
+                    opened_prs_msg = 'Открыты новые pull request\'ы: {}'.format(" ".join(opened_prs))
+
+                merged_prs = list(filter(lambda x: x.state is 'MERGED', diff_prs))
+                if len(merged_prs) > 0:
+                    merged_prs_msg = 'Вмержены pull request\'ы: {}'.format(" ".join(merged_prs))
+
+                declined_prs = list(filter(lambda x: x.state is 'DECLINED', diff_prs))
+                if len(declined_prs) > 0:
+                    declined_prs_msg = 'Вмержены pull request\'ы: {}'.format(" ".join(declined_prs))
+
+                self.reply("\n".join((intro, opened_prs_msg, merged_prs_msg, declined_prs_msg)))
+                prev_prs = prs
+
+            time.sleep(500)
+
+
+class StashSinglePrNotifyWorker(DefaultWorker):
+    url = "http://52.164.121.202:7990"
+    reg_exp = re.compile(
+        r'^\s*(подписка\s+pull\s+request[s]?|подписка\s+на\s+PR)\s+с\s+ID\s+(\S+)\s+в\s+проекте\s+(\S+)\s+репозитории\s+(\S+)',
+        re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        pr_id, project, repo = exp.group(2), exp.group(3), exp.group(4)
+
+        cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
+
+        try:
+            stash = stashy.connect(self.url, cred['login'], cred['passswd'])
+        except Exception:
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+            return
+
+        prev_pr = stash.projects[project].repos[repo].pull_requests[pr_id].get()
+        intro = 'В репозитории #{}_{}_PR{} получены новые изменения Pull Request:'.format(repo, project, pr_id)
+        while prev_pr and prev_pr.state != 'MERGED':
+            pr = stash.projects[project].repos[repo].pull_requests[pr_id].get()
+            if pr != prev_pr:
+                diff_info = 'Текущие изменения в PR:\n{}'.format(pr.diff())
+                merge_info = 'Информация о доступности слияния:\n{}'.format(pr.merge_info())
+                can_merged = 'Слияние можно проводить' if pr.can_merge() else 'Слияние запрещено'
+
+                self.reply("\n".join((intro, diff_info, merge_info, can_merged)))
+                prev_pr = pr
+
+            time.sleep(500)
+
+
 workers = [
     HelpWorker,
     CredentialsWorker,
@@ -263,5 +380,8 @@ workers = [
     JenkinsStatusWorker,
     JenkinsRunWorker,
     AnekdotWorker,
+    StashRepoNotifyWorker,
+    StashPrsNotifyWorker,
+    StashSinglePrNotifyWorker,
     ChatBotWorker
 ]

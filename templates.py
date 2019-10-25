@@ -18,3 +18,7 @@ def get_cred_info(uid):
     for tpl in [tpl_server, tpl_bitbucket, tpl_jenkins]:
         res += Template(tpl).render(data)
     return res if res else "Записи отсутствуют"
+
+
+def diff(l1, l2):
+    return [x for x in l1 if x not in l2]
