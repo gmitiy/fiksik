@@ -161,6 +161,23 @@ class ProcessListWorker(AnsibleWorker):
     reg_exp = re.compile(r'^\s*(запущенные\s+процессы\s+сервера|server\s+proc)\s+(\S+)', re.IGNORECASE)
 
 
+class WildflyWorker(AnsibleWorker):
+    file_name = './ansible/check_wf.yaml'
+    reg_exp = re.compile(r'^\s*(статус\s+wildfly|status\s+wildfly)\s+(\S+)', re.IGNORECASE)
+
+    def run(self):
+        exp = self.reg_exp.match(self.param.message.textMessage.text)
+        res, data = self.exec(exp.group(2))
+        if res:
+            tmp = str(data).splitlines()
+            if tmp[-1] == 'true':
+                self.reply('Wildfly запущен')
+            else:
+                self.reply('Wildfly остановлен')
+        else:
+            self.reply(data)
+
+
 class ChatBotWorker(DefaultWorker):
     def run(self):
         self.send(str(c_bot.get_response(self.param.message.textMessage.text)))
@@ -222,6 +239,7 @@ workers = [
     RebootWorker,
     FastRebootWorker,
     ProcessListWorker,
+    WildflyWorker,
     JenkinsStatusWorker,
     JenkinsRunWorker,
     AnekdotWorker,

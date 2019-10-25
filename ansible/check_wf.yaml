@@ -2,6 +2,11 @@
 - hosts: all
   gather_facts: false
   tasks:
-    - name: check jboss is running
+    - name: grep wildfly
       sudo: yes
       shell: ps aux | grep 'wildfly' | grep -v grep
+      register: lines
+
+    - name: check if wildfly runnig
+      shell: echo "true"
+      when: lines.stdout.find('wildfly') != -1
