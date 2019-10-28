@@ -30,6 +30,7 @@ class DefaultWorker(Thread):
         self.reply(const.wrong_command)
 
     def reply(self, text):
+        print(text)
         self.bot.messaging.reply(self.param.peer, [self.param.mid], text)
 
     def send(self, text):
@@ -138,7 +139,7 @@ class AnsibleWorker(DefaultWorker):
 
 class HostInfoWorker(AnsibleWorker):
     file_name = './ansible/host_info.yaml'
-    reg_exp = re.compile(r'^\s*(Состояние\s+использования\s+ресурсов\s+сервера|server\s+info)\s+(\S+)', re.IGNORECASE)
+    reg_exp = re.compile(r'^\s*(статистика\s+использования\s+ресурсов\s+сервера|server\s+info)\s+(\S+)', re.IGNORECASE)
 
     def run(self):
         exp = self.reg_exp.match(self.param.message.textMessage.text)
@@ -265,7 +266,7 @@ class StashRepoNotifyWorker(DefaultWorker):
         try:
             stash = stashy.connect(self.url, cred['login'], cred['passwd'])
         except Exception as e:
-            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль ' + str(e))
+            self.reply('Не удалось авторизоваться в BitBucket укажи другой   и пароль ' + str(e))
             return
 
         prev_commits = []
@@ -273,7 +274,7 @@ class StashRepoNotifyWorker(DefaultWorker):
         while True:
             removed_commits_msg, added_commits_msg = '', ''
             commits = list(stash.projects[project].repos[repo].commits('master'))
-            if not prev_commits and prev_commits != commits:
+            if not prev_commits or prev_commits != commits:
                 removed_commits = diff(prev_commits, commits)
                 if len(removed_commits) > 0:
                     removed_commits_msg = 'Удалены коммиты:\n{}'.format(
@@ -295,7 +296,7 @@ class StashRepoNotifyWorker(DefaultWorker):
                 self.reply("\n".join((intro, removed_commits_msg, added_commits_msg)))
                 prev_commits = commits
 
-            time.sleep(500)
+            time.sleep(5)
 
 
 class StashPrsNotifyWorker(DefaultWorker):
@@ -310,24 +311,28 @@ class StashPrsNotifyWorker(DefaultWorker):
 
         cred = db.get_cred(self.param.sender_uid, 'BITBUCKET')
 
-        try:
-            stash = stashy.connect(self.url, cred['login'], cred['passwd'])
-        except Exception:
-            self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
-            return
 
-        prev_prs = list(stash.projects[project].repos[repo].pull_requests.all())
+
+        prev_prs = []
         intro = 'В репозитории #{}_{} получены новые изменения Pull Request:'.format(repo, project)
         while True:
+            try:
+                stash = stashy.connect(self.url, cred['login'], cred['passwd'])
+            except Exception:
+                self.reply('Не удалось авторизоваться в BitBucket укажи другой логин и пароль')
+                return
+
             declined_prs_msg, opened_prs_msg, merged_prs_msg = '', '', ''
-            prs = list(stash.projects[project].repos[repo].pull_requests.all())
-            if not prev_prs and prev_prs != prs:
+            prs = list(set(stash.projects[project].repos[repo].pull_requests.all()) |
+            set(stash.projects[project].repos[repo].pull_requests.all(state='MERGED')) |
+            set(stash.projects[project].repos[repo].pull_requests.all(state='DECLINED')))
+            if not prev_prs or prev_prs != prs:
                 diff_prs = diff(prs, prev_prs)
 
-                opened_prs = list(filter(lambda x: x['state'] is 'OPEN', diff_prs))
+                opened_prs = list(filter(lambda x: x['state'] in 'OPEN', diff_prs))
                 if len(opened_prs) > 0:
                     opened_prs_msg = "\n".join(
-                        ["Пользователь {} открыл PR #{} \"{}\" {}->{}".format(pr['author']['displayName'],
+                        ["Пользователь {} открыл PR #{} \"{}\" {}->{}".format(pr['author']['user']['displayName'],
                                                                               pr['id'], pr['title'],
                                                                               pr['fromRef']['displayId'],
                                                                               pr['toRef']['displayId']) for
@@ -335,10 +340,10 @@ class StashPrsNotifyWorker(DefaultWorker):
                          opened_prs]
                     )
 
-                merged_prs = list(filter(lambda x: x['state'] is 'MERGED', diff_prs))
+                merged_prs = list(filter(lambda x: x['state'] in 'MERGED', diff_prs))
                 if len(merged_prs) > 0:
                     merged_prs_msg = "\n".join(
-                        ["Пользователь {} выполнил merge PR #{} \"{}\" {}->{}".format(pr['author']['displayName'],
+                        ["Пользователь {} выполнил merge PR #{} \"{}\" {}->{}".format(pr['author']['user']['displayName'],
                                                                                       pr['id'], pr['title'],
                                                                                       pr['fromRef']['displayId'],
                                                                                       pr['toRef']['displayId']) for
@@ -346,10 +351,10 @@ class StashPrsNotifyWorker(DefaultWorker):
                          merged_prs]
                     )
 
-                declined_prs = list(filter(lambda x: x['state'] is 'DECLINED', diff_prs))
+                declined_prs = list(filter(lambda x: x['state'] in 'DECLINED', diff_prs))
                 if len(declined_prs) > 0:
                     declined_prs_msg = "\n".join(
-                        ["Пользователь {} отклонил PR #{} \"{}\" {}->{}".format(pr['author']['displayName'],
+                        ["Пользователь {} отклонил PR #{} \"{}\" {}->{}".format(pr['author']['user']['displayName'],
                                                                                 pr['id'], pr['title'],
                                                                                 pr['fromRef']['displayId'],
                                                                                 pr['toRef']['displayId']) for
@@ -360,7 +365,7 @@ class StashPrsNotifyWorker(DefaultWorker):
                 self.reply("\n".join((intro, opened_prs_msg, merged_prs_msg, declined_prs_msg)))
                 prev_prs = prs
 
-            time.sleep(500)
+            time.sleep(5)
 
 
 class StashSinglePrNotifyWorker(DefaultWorker):
@@ -393,7 +398,7 @@ class StashSinglePrNotifyWorker(DefaultWorker):
                 self.reply("\n".join((intro, diff_info, merge_info, can_merged)))
                 prev_pr = pr
 
-            time.sleep(500)
+            time.sleep(5)
 
 
 workers = [
