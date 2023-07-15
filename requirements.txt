@@ -7,7 +7,7 @@ cffi==1.12.3
 chardet==3.0.4
 ChatterBot==1.0.5
 chatterbot-corpus==1.2.0
-cryptography==39.0.1
+cryptography==41.0.2
 cymem==2.0.2
 decorator==4.4.0
 dialog-api==0.0.50
